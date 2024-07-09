@@ -1,6 +1,6 @@
 import React from "react";
 
-const AnimatedLogo = () => {
+const AnimatedLogo: React.FC = () => {
   return (
     <div className="flex items-center justify-center h-screen">
       <svg

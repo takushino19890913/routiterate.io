@@ -1,11 +1,26 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import FontFaceObserver from "fontfaceobserver";
+import { AnimatedLoadingScreenProps } from "./types";
 
-const AnimatedLoadingScreen = ({ onLoadComplete }) => {
-  const canvasRef = useRef(null);
-  const fallbackTextRef = useRef(null);
-  const animationRef = useRef(null);
-  const [particles, setParticles] = useState([]);
+interface Particle {
+  x: number;
+  y: number;
+  size: number;
+  targetX: number;
+  targetY: number;
+  speed: number;
+  velocityX: number;
+  velocityY: number;
+  color: string;
+  update: () => void;
+  draw: (ctx: CanvasRenderingContext2D) => void;
+}
+
+const AnimatedLoadingScreen: React.FC<AnimatedLoadingScreenProps> = ({ onLoadComplete }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const fallbackTextRef = useRef<HTMLDivElement | null>(null);
+  const animationRef = useRef<number | null>(null);
+  const [particles, setParticles] = useState<Particle[]>([]);
   const [fontLoaded, setFontLoaded] = useState(false);
   const [opacity, setOpacity] = useState(1);
   const primaryFont = "Arvo";
@@ -14,7 +29,7 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
   const fontSize = 48;
   const colors = ["#6a11cb", "#2575fc", "#00c6fb", "#005bea", "#333333"];
 
-  const loadFont = (font) => {
+  const loadFont = (font: string): Promise<void> => {
     return new Promise((resolve, reject) => {
       const link = document.createElement("link");
       link.href = `https://fonts.googleapis.com/css2?family=${font.replace(
@@ -22,13 +37,13 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
         "+"
       )}&display=swap`;
       link.rel = "stylesheet";
-      link.onload = resolve;
-      link.onerror = reject;
+      link.onload = () => resolve();
+      link.onerror = () => reject();
       document.head.appendChild(link);
     });
   };
 
-  const setStyles = (font) => {
+  const setStyles = (font: string): void => {
     const dynamicStyles = document.createElement("style");
     dynamicStyles.textContent = `
       body, #fallback-text {
@@ -38,39 +53,45 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
     document.head.appendChild(dynamicStyles);
   };
 
-  const Particle = class {
-    constructor(x, y, targetX, targetY) {
+  class ParticleClass implements Particle {
+    size: number;
+    speed: number;
+    velocityX: number;
+    velocityY: number;
+    color: string;
+
+    constructor(public x: number, public y: number, public targetX: number, public targetY: number) {
       this.x = Math.random() * 400;
       this.y = Math.random() * 100;
       this.size = Math.random() * 1 + 0.5;
-      this.targetX = targetX;
-      this.targetY = targetY;
       this.speed = Math.random() * 0.7 + 0.01;
       this.velocityX = 0;
       this.velocityY = 0;
       this.color = colors[Math.floor(Math.random() * colors.length)];
     }
 
-    update() {
+    update(): void {
       this.velocityX = (this.targetX - this.x) * this.speed;
       this.velocityY = (this.targetY - this.y) * this.speed;
       this.x += this.velocityX;
       this.y += this.velocityY;
     }
 
-    draw(ctx) {
+    draw(ctx: CanvasRenderingContext2D): void {
       ctx.fillStyle = this.color;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
       ctx.fill();
     }
-  };
+  }
 
-  const init = useCallback((font) => {
+  const init = useCallback((font: string) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
     ctx.font = `${fontSize}px '${font}', ${fallbackFonts}`;
     ctx.fillStyle = "#333333";
     ctx.textAlign = "center";
@@ -81,11 +102,11 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const newParticles = [];
+    const newParticles: Particle[] = [];
     for (let y = 0; y < imageData.height; y += 1) {
       for (let x = 0; x < imageData.width; x += 1) {
         if (imageData.data[(y * imageData.width + x) * 4 + 3] > 128) {
-          newParticles.push(new Particle(x, y, x, y));
+          newParticles.push(new ParticleClass(x, y, x, y));
         }
       }
     }
@@ -97,6 +118,8 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     particles.forEach((particle) => {
@@ -114,7 +137,7 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
       canvas.height = 100;
     }
 
-    const initFont = async (font) => {
+    const initFont = async (font: string) => {
       try {
         await loadFont(font);
         setStyles(font);
@@ -155,10 +178,10 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
               onLoadComplete();
               return 0;
             }
-            return prevOpacity - 0.05; // フェードアウトの速度を上げる
+            return prevOpacity - 0.05;
           });
-        }, 20); // フェードアウトの間隔を短くする
-      }, 1500); // フェードアウト開始までの時間を1秒に短縮
+        }, 20);
+      }, 1500);
 
       return () => {
         clearTimeout(timer);
@@ -175,11 +198,7 @@ const AnimatedLoadingScreen = ({ onLoadComplete }) => {
       style={{ opacity: opacity, transition: "opacity 0.5s ease-out" }}
     >
       <div className="flex flex-col items-center space-y-4">
-        {" "}
-        {/* 間隔を space-y-4 に変更 */}
         <div className="w-[100px] h-[50px]">
-          {" "}
-          {/* 高さを 50px に変更 */}
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 100 50"
